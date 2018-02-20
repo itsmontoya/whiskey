@@ -1,6 +1,7 @@
-# Glass
+# Whiskey
 
 ## Benchmarks
+
 ```bash
 goos: linux
 goarch: amd64
