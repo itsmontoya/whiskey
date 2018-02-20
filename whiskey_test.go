@@ -26,9 +26,9 @@ var (
 	testBktName = []byte("testbkt")
 )
 
-func TestGlass(t *testing.T) {
+func TestWhiskey(t *testing.T) {
 	var (
-		g   *Glass
+		db  *DB
 		err error
 	)
 
@@ -37,12 +37,12 @@ func TestGlass(t *testing.T) {
 	}
 	defer os.RemoveAll("testing")
 
-	if g, err = New("testing", "data.db"); err != nil {
+	if db, err = New("testing", "data.db"); err != nil {
 		t.Fatal(err)
 	}
-	defer g.Close()
+	defer db.Close()
 
-	if err = g.Update(func(txn *Txn) (err error) {
+	if err = db.Update(func(txn *Txn) (err error) {
 		var bkt *Bucket
 		if bkt, err = txn.CreateBucket([]byte("basic")); err != nil {
 			return
@@ -73,7 +73,7 @@ func TestGlass(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = g.Read(func(txn *Txn) (err error) {
+	if err = db.Read(func(txn *Txn) (err error) {
 		var bkt *Bucket
 		if bkt = txn.Bucket([]byte("basic")); bkt == nil {
 			return errors.Error("bucket doesn't exist")
@@ -97,15 +97,15 @@ func TestGlass(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = g.Close(); err != nil {
+	if err = db.Close(); err != nil {
 		t.Fatal(err)
 	}
 
-	if g, err = New("testing", "data.db"); err != nil {
+	if db, err = New("testing", "data.db"); err != nil {
 		t.Fatal(err)
 	}
 
-	if err = g.Update(func(txn *Txn) (err error) {
+	if err = db.Update(func(txn *Txn) (err error) {
 		var bkt *Bucket
 		if bkt, err = txn.CreateBucket([]byte("basic")); err != nil {
 			return
@@ -124,7 +124,7 @@ func TestGlass(t *testing.T) {
 
 func TestPut(t *testing.T) {
 	var (
-		g   *Glass
+		db  *DB
 		err error
 	)
 
@@ -133,13 +133,13 @@ func TestPut(t *testing.T) {
 	}
 	defer os.RemoveAll("testing")
 
-	if g, err = New("testing", "test_put"); err != nil {
+	if db, err = New("testing", "test_put"); err != nil {
 		t.Fatal(err)
 	}
-	defer g.Close()
+	defer db.Close()
 
 	for _, kv := range testSortedListStr {
-		if err = g.Update(func(txn *Txn) (err error) {
+		if err = db.Update(func(txn *Txn) (err error) {
 			var bkt *Bucket
 			if bkt, err = txn.CreateBucket(testBktName); err != nil {
 				return
@@ -168,7 +168,7 @@ func TestPut(t *testing.T) {
 
 func BenchmarkWhiskeyGet(b *testing.B) {
 	var (
-		g   *Glass
+		db  *DB
 		err error
 	)
 
@@ -177,14 +177,14 @@ func BenchmarkWhiskeyGet(b *testing.B) {
 	}
 	defer os.RemoveAll("testing")
 
-	if g, err = New("testing", "benchmarks"); err != nil {
+	if db, err = New("testing", "benchmarks"); err != nil {
 		b.Fatal(err)
 	}
-	defer g.Close()
+	defer db.Close()
 
 	for _, kv := range testSortedListStr {
 
-		if err = g.Update(func(txn *Txn) (err error) {
+		if err = db.Update(func(txn *Txn) (err error) {
 			var bkt *Bucket
 			if bkt, err = txn.CreateBucket(testBktName); err != nil {
 				return
@@ -206,7 +206,7 @@ func BenchmarkWhiskeyGet(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for _, kv := range testSortedListStr {
-			g.Read(func(txn *Txn) (err error) {
+			db.Read(func(txn *Txn) (err error) {
 				bkt := txn.Bucket(testBktName)
 				testVal, err = bkt.Get(kv.Val)
 				return
@@ -219,7 +219,7 @@ func BenchmarkWhiskeyGet(b *testing.B) {
 
 func BenchmarkWhiskeyPut(b *testing.B) {
 	var (
-		g   *Glass
+		db  *DB
 		err error
 	)
 
@@ -228,16 +228,16 @@ func BenchmarkWhiskeyPut(b *testing.B) {
 	}
 	defer os.RemoveAll("testing")
 
-	if g, err = New("testing", "benchmarks"); err != nil {
+	if db, err = New("testing", "benchmarks"); err != nil {
 		b.Fatal(err)
 	}
-	defer g.Close()
+	defer db.Close()
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
 		for _, kv := range testSortedListStr {
-			if err = g.Update(func(txn *Txn) (err error) {
+			if err = db.Update(func(txn *Txn) (err error) {
 				var bkt *Bucket
 				if bkt, err = txn.CreateBucket(testBktName); err != nil {
 					return
@@ -255,7 +255,7 @@ func BenchmarkWhiskeyPut(b *testing.B) {
 
 func BenchmarkWhiskeyBatchPut(b *testing.B) {
 	var (
-		g   *Glass
+		db  *DB
 		err error
 	)
 
@@ -264,15 +264,15 @@ func BenchmarkWhiskeyBatchPut(b *testing.B) {
 	}
 	defer os.RemoveAll("testing")
 
-	if g, err = New("testing", "benchmarks"); err != nil {
+	if db, err = New("testing", "benchmarks"); err != nil {
 		b.Fatal(err)
 	}
-	defer g.Close()
+	defer db.Close()
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		if err = g.Update(func(txn *Txn) (err error) {
+		if err = db.Update(func(txn *Txn) (err error) {
 			var bkt *Bucket
 			if bkt, err = txn.CreateBucket(testBktName); err != nil {
 				return
