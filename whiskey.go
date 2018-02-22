@@ -87,16 +87,16 @@ func (db *DB) Update(fn TxnFn) (err error) {
 		}
 
 		err = txn.flush()
+		txn.r = nil
+		txn.w = nil
+		txn.kbuf = nil
 	}()
 
-	txn.r = nil
-	txn.w = nil
-	txn.kbuf = nil
 	return
 }
 
 // UpdateTxn will return an update transaction
-func (db *DB) UpdateTxn() (tp *Txn, close func()) {
+func (db *DB) UpdateTxn() (tp *Txn, close func(commit bool) error) {
 	var txn Txn
 	txn.r = db.w
 	txn.w = db.s
@@ -105,13 +105,18 @@ func (db *DB) UpdateTxn() (tp *Txn, close func()) {
 
 	tp = &txn
 
-	close = func() {
+	close = func(commit bool) (err error) {
+		if commit {
+			err = txn.flush()
+		}
+
 		txn.r = nil
 		txn.w = nil
 		txn.kbuf = nil
 
 		db.s.Reset()
-		db.mux.RUnlock()
+		db.mux.Unlock()
+		return
 	}
 
 	return
