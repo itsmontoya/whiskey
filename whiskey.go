@@ -73,13 +73,21 @@ func (db *DB) Update(fn TxnFn) (err error) {
 
 	db.mux.Lock()
 	defer db.mux.Unlock()
-	defer db.s.Reset()
+	// This anon function might seem ridiculous, but for some reason not having the function caused
+	// a performance regression, see below:
+	// # Function removed
+	// BenchmarkWhiskeyPut-16      1000      2116595 ns/op      392058 B/op      13001 allocs/op
+	// # Function added
+	// BenchmarkWhiskeyPut-16      1000      2073500 ns/op      376022 B/op      12000 allocs/op
+	func() {
+		defer db.s.Reset()
 
-	if err = fn(&txn); err != nil {
-		return
-	}
+		if err = fn(&txn); err != nil {
+			return
+		}
 
-	err = txn.flush()
+		err = txn.flush()
+	}()
 
 	txn.r = nil
 	txn.w = nil
