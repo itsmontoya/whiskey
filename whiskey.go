@@ -1,7 +1,8 @@
 package whiskey
 
 import (
-	"github.com/PathDNA/atoms"
+	"sync"
+
 	"github.com/itsmontoya/rbt"
 	"github.com/missionMeteora/toolkit/errors"
 )
@@ -32,7 +33,7 @@ func New(dir, name string) (dbp *DB, err error) {
 
 // DB represents a database
 type DB struct {
-	mux atoms.RWMux
+	mux sync.RWMutex
 
 	w *rbt.Tree
 	// Scratch disk
@@ -47,12 +48,20 @@ func (db *DB) Read(fn TxnFn) (err error) {
 	var txn Txn
 	txn.r = db.w
 
-	db.mux.Read(func() {
-		err = fn(&txn)
-	})
+	db.mux.RLock()
+	defer db.mux.RUnlock()
+	err = fn(&txn)
+	return
+}
 
-	txn.r = nil
-	txn.kbuf = nil
+// ReadTxn will return a read transaction
+func (db *DB) ReadTxn(fn TxnFn) (tp *Txn, close func()) {
+	var txn Txn
+	txn.r = db.w
+
+	db.mux.RLock()
+	close = db.mux.RUnlock
+	tp = &txn
 	return
 }
 
@@ -62,14 +71,15 @@ func (db *DB) Update(fn TxnFn) (err error) {
 	txn.r = db.w
 	txn.w = db.s
 
-	db.mux.Update(func() {
-		defer db.s.Reset()
-		if err = fn(&txn); err != nil {
-			return
-		}
+	db.mux.Lock()
+	defer db.mux.Unlock()
+	defer db.s.Reset()
 
-		err = txn.flush()
-	})
+	if err = fn(&txn); err != nil {
+		return
+	}
+
+	err = txn.flush()
 
 	txn.r = nil
 	txn.w = nil
@@ -77,13 +87,34 @@ func (db *DB) Update(fn TxnFn) (err error) {
 	return
 }
 
+// UpdateTxn will return an update transaction
+func (db *DB) UpdateTxn() (tp *Txn, close func()) {
+	var txn Txn
+	txn.r = db.w
+	txn.w = db.s
+
+	db.mux.Lock()
+
+	tp = &txn
+
+	close = func() {
+		txn.r = nil
+		txn.w = nil
+		txn.kbuf = nil
+
+		db.s.Reset()
+		db.mux.RUnlock()
+	}
+
+	return
+}
+
 // Close will close an instance of DB
 func (db *DB) Close() (err error) {
 	var errs errors.ErrorList
-	db.mux.Update(func() {
-		errs.Push(db.w.Close())
-		errs.Push(db.s.Close())
-	})
-
+	db.mux.Lock()
+	defer db.mux.Unlock()
+	errs.Push(db.w.Close())
+	errs.Push(db.s.Close())
 	return errs.Err()
 }
