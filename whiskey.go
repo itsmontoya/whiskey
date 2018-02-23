@@ -86,7 +86,7 @@ func (db *DB) Update(fn TxnFn) (err error) {
 			return
 		}
 
-		err = txn.flush()
+		err = txn.Commit()
 		txn.r = nil
 		txn.w = nil
 		txn.kbuf = nil
@@ -96,7 +96,7 @@ func (db *DB) Update(fn TxnFn) (err error) {
 }
 
 // UpdateTxn will return an update transaction
-func (db *DB) UpdateTxn() (tp *Txn, close func(commit bool) error) {
+func (db *DB) UpdateTxn() (tp *Txn, close func()) {
 	var txn Txn
 	txn.r = db.w
 	txn.w = db.s
@@ -105,11 +105,7 @@ func (db *DB) UpdateTxn() (tp *Txn, close func(commit bool) error) {
 
 	tp = &txn
 
-	close = func(commit bool) (err error) {
-		if commit {
-			err = txn.flush()
-		}
-
+	close = func() {
 		txn.r = nil
 		txn.w = nil
 		txn.kbuf = nil
