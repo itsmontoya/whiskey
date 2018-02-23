@@ -163,7 +163,13 @@ func (t *Txn) writeEntry(key, val []byte) (end bool) {
 	return
 }
 
-func (t *Txn) flush() (err error) {
+// Commit will commit the current data on the scratch disk to the main disk
+func (t *Txn) Commit() (err error) {
+	if t.w == nil {
+		err = ErrCannotWrite
+		return
+	}
+
 	for _, b := range t.bkts {
 		b.rgfn = t.truncateRoot
 		if b.r == nil {
@@ -172,11 +178,17 @@ func (t *Txn) flush() (err error) {
 			}
 		}
 
-		if err = b.flush(); err != nil {
+		if err = b.Commit(); err != nil {
+			return
+		}
+
+		if err = b.close(); err != nil {
 			return
 		}
 	}
-
+	// Reset buckets
+	t.bkts = t.bkts[:0]
+	// Write all direct entries
 	t.w.ForEach(t.writeEntry)
 	return
 }
