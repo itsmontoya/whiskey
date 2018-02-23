@@ -58,19 +58,18 @@ func (b *Bucket) growScratch(sz int64) (bs []byte) {
 // NOTE: Trying to clean up how buckets allocate themselves
 
 // Close will close a bucket
-func (b *Bucket) Close() (err error) {
-	if err = b.w.Close(); err != nil {
-		return
+func (b *Bucket) close() (err error) {
+	if b.w != nil {
+		if err = b.w.Close(); err != nil {
+			return
+		}
 	}
 
-	// Technically we will panic if close is called twice.
-	// Let's take some time to really plan this and see how we
-	// want to approach this
-	b.w = nil
-
 	b.key = nil
-	b.r = nil
+
 	b.w = nil
+	b.r = nil
+
 	b.rgfn = nil
 	b.sgfn = nil
 	return
