@@ -18,8 +18,11 @@ type backend struct {
 }
 
 func (b *backend) Grow(sz int64) (bs []byte) {
-	if sz <= int64(len(b.bs)) {
+	cap := int64(len(b.bs))
+	if sz <= cap {
 		return b.bs
+	} else if cap == 0 {
+		cap = next32(sz)
 	}
 
 	var (
@@ -27,7 +30,7 @@ func (b *backend) Grow(sz int64) (bs []byte) {
 		grew   bool
 	)
 
-	if bs, offset, grew = b.a.allocate(sz); grew {
+	if bs, offset, grew = b.a.allocate(sz); grew && b.offset != -1 {
 		b.bs = b.a.mm[b.offset:]
 	}
 
@@ -63,4 +66,13 @@ func (b *backend) Close() (err error) {
 	b.offset = -1
 	b.sz = -1
 	return
+}
+
+func next32(val int64) int64 {
+	rem := val % 32
+	if rem == 0 {
+		return val
+	}
+
+	return val + (32 - rem)
 }
