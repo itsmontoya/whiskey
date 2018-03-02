@@ -19,11 +19,22 @@ const (
 // New will return a new DB
 func New(dir, name string) (dbp *DB, err error) {
 	var db DB
-	if db.w, err = rbt.NewMMAP(dir, name+".wdb", 1024); err != nil {
+	if db.a, err = newallocator(dir, name, RW); err != nil {
 		return
 	}
 
-	if db.s, err = rbt.NewMMAP(dir, name+".scratch.wdb", 1024); err != nil {
+	db.wb = newbackend(db.a)
+	if db.w, err = rbt.NewRaw(1024, db.wb.Grow, db.wb.Close); err != nil {
+		return
+	}
+
+	var sa *allocator
+	if sa, err = newallocator(dir, name+".scratch", RW); err != nil {
+		return
+	}
+
+	sb := newbackend(sa)
+	if db.s, err = rbt.NewRaw(1024, sb.Grow, sb.Close); err != nil {
 		return
 	}
 
@@ -34,6 +45,8 @@ func New(dir, name string) (dbp *DB, err error) {
 // DB represents a database
 type DB struct {
 	mux sync.RWMutex
+	a   *allocator
+	wb  *backend
 
 	w *rbt.Tree
 	// Scratch disk
