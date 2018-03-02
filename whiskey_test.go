@@ -32,12 +32,12 @@ func TestWhiskey(t *testing.T) {
 		err error
 	)
 
-	if err = os.MkdirAll("testing", 0755); err != nil {
+	if err = os.MkdirAll("./testing", 0755); err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll("testing")
+	defer os.RemoveAll("./testing")
 
-	if db, err = New("testing", "data.db"); err != nil {
+	if db, err = New("./testing", "data.db"); err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
@@ -97,6 +97,8 @@ func TestWhiskey(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	return
+
 	if err = db.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -128,12 +130,12 @@ func TestPut(t *testing.T) {
 		err error
 	)
 
-	if err = os.MkdirAll("testing", 0755); err != nil {
+	if err = os.MkdirAll("./testing", 0755); err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll("testing")
+	defer os.RemoveAll("./testing")
 
-	if db, err = New("testing", "test_put"); err != nil {
+	if db, err = New("./testing", "test_put"); err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
