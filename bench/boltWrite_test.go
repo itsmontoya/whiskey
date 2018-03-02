@@ -7,13 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/missionMeteora/journaler"
-
 	"github.com/boltDB/bolt"
 )
 
 func openboltEnv(dbPath string) *bolt.DB {
-	journaler.Debug("Opening bolt")
 	if err := os.MkdirAll(dbPath, 0755); err != nil {
 		log.Fatalln(err)
 	}
