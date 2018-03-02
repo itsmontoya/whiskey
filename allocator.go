@@ -3,6 +3,7 @@ package whiskey
 import (
 	"os"
 	"path"
+	"unsafe"
 
 	mmap "github.com/edsrzf/mmap-go"
 	"github.com/missionMeteora/journaler"
@@ -15,11 +16,19 @@ const RW = os.O_CREATE | os.O_RDWR
 // ROnly represents Read-only permissions
 const ROnly = os.O_RDONLY
 
+const metaSize = int64(unsafe.Sizeof(meta{}))
+
 // newallocator will return a new Mmap
 func newallocator(dir, name string, perms int) (ap *allocator, err error) {
 	var a allocator
 	if a.f, err = os.OpenFile(path.Join(dir, name), perms, 0644); err != nil {
 		return
+	}
+
+	a.grow(metaSize)
+	a.setMeta()
+	if a.m.tail == 0 {
+		a.m.tail = metaSize
 	}
 
 	ap = &a
@@ -31,8 +40,12 @@ type allocator struct {
 	f  *os.File
 	mm mmap.MMap
 
-	tail int64
-	cap  int64
+	m   *meta
+	cap int64
+}
+
+func (a *allocator) setMeta() {
+	a.m = (*meta)(unsafe.Pointer(&a.mm[0]))
 }
 
 func (a *allocator) unmap() (err error) {
@@ -75,16 +88,18 @@ func (a *allocator) grow(sz int64) {
 		journaler.Error("Map error: %v", err)
 		return
 	}
+
+	a.setMeta()
 }
 
 func (a *allocator) allocate(sz int64) (bs []byte, offset int64, grew bool) {
-	offset = a.tail
-	if a.tail += sz; a.cap <= a.tail {
-		a.grow(a.tail)
+	offset = a.m.tail
+	if a.m.tail += sz; a.cap <= a.m.tail {
+		a.grow(a.m.tail)
 		grew = true
 	}
 
-	bs = a.mm[offset:a.tail]
+	bs = a.mm[offset:a.m.tail]
 	return
 }
 
@@ -104,4 +119,8 @@ func (a *allocator) Close() (err error) {
 	errs.Push(a.f.Close())
 	a.f = nil
 	return
+}
+
+type meta struct {
+	tail int64
 }
