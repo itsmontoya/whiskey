@@ -19,7 +19,7 @@ func BenchmarkGetSmall_Whiskey(b *testing.B) {
 	}()
 
 	log.Printf("bench get SMALL (8KB), take %d (n=%d)\n", take, b.N)
-	benchGet_Whiskey(b, 20*GB, SMALL_VAL)
+	benchGetWhiskey(b, 20*GB, SmallVal)
 }
 
 func BenchmarkGetLarge_Whiskey(b *testing.B) {
@@ -32,16 +32,16 @@ func BenchmarkGetLarge_Whiskey(b *testing.B) {
 	}()
 
 	log.Printf("bench get LARGE (8MB), take %d (n=%d)", take, b.N)
-	benchGet_Whiskey(b, 20*GB, LARGE_VAL)
+	benchGetWhiskey(b, 20*GB, LargeVal)
 }
 
-func benchGet_Whiskey(b *testing.B, size uint, val []byte) {
-	db, err := whiskey.New("", fmt.Sprintf("W%d", len(val)/1024)+BENCH_DB)
+func benchGetWhiskey(b *testing.B, size uint, val []byte) {
+	db, err := whiskey.New(dbPath, fmt.Sprintf("W%d", len(val)/1024))
 	checkErr(err)
 	defer db.Close()
 
 	txn, txnClose := db.ReadTxn(nil)
-	bucket := txn.Bucket(BENCH_DBI)
+	bucket := txn.Bucket(benchBucket)
 
 	b.SetBytes(int64(len(val)))
 	b.ResetTimer()
@@ -65,6 +65,5 @@ func benchGet_Whiskey(b *testing.B, size uint, val []byte) {
 	}
 	txnClose()
 	log.Println("missed:", missed, "found:", found)
-	list(db)
 	mem()
 }
