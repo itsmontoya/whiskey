@@ -4,11 +4,15 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"sync/atomic"
 	"testing"
+
+	"github.com/missionMeteora/journaler"
 
 	"github.com/bmatsuo/lmdb-go/lmdb"
 	"github.com/boltDB/bolt"
 
+	"github.com/itsmontoya/rbt"
 	"github.com/itsmontoya/rbt/testUtils"
 	"github.com/missionMeteora/toolkit/errors"
 )
@@ -40,9 +44,11 @@ func TestWhiskey(t *testing.T) {
 	if db, err = New("./testing", "data.db"); err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	//defer db.Close()
 
-	if err = db.Update(func(txn *Txn) (err error) {
+	journaler.Debug("OH YES?: %v", db.wb.bs)
+
+	if err = db.Update(func(txn Txn) (err error) {
 		var bkt *Bucket
 		if bkt, err = txn.CreateBucket([]byte("basic")); err != nil {
 			return
@@ -64,6 +70,8 @@ func TestWhiskey(t *testing.T) {
 			return
 		}
 
+		journaler.Debug("THIS IS IT? %s", string(val))
+
 		if string(val) != "Josh" {
 			return fmt.Errorf("invalid value, expected Josh and received %s", string(val))
 		}
@@ -73,10 +81,13 @@ func TestWhiskey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = db.Read(func(txn *Txn) (err error) {
+	checkTree := (*rbt.Tree)(atomic.LoadPointer(&db.tree))
+	journaler.Debug("Post-write check: %v", checkTree)
+
+	if err = db.Read(func(txn Txn) (err error) {
 		var bkt *Bucket
-		if bkt = txn.Bucket([]byte("basic")); bkt == nil {
-			return errors.Error("bucket doesn't exist")
+		if bkt, err = txn.Bucket([]byte("basic")); err != nil {
+			return
 		}
 
 		if err = bkt.Put([]byte("name"), []byte("Josh")); err == nil {
@@ -97,17 +108,19 @@ func TestWhiskey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	return
+	journaler.Debug("Post-read check: %v", db.wb.bs)
 
 	if err = db.Close(); err != nil {
 		t.Fatal(err)
 	}
 
-	if db, err = New("testing", "data.db"); err != nil {
+	journaler.Debug("\n\n\nClosed! About to open\n\n\n")
+
+	if db, err = New("./testing", "data.db"); err != nil {
 		t.Fatal(err)
 	}
 
-	if err = db.Update(func(txn *Txn) (err error) {
+	if err = db.Update(func(txn Txn) (err error) {
 		var bkt *Bucket
 		if bkt, err = txn.CreateBucket([]byte("basic")); err != nil {
 			return
@@ -141,7 +154,7 @@ func TestPut(t *testing.T) {
 	defer db.Close()
 
 	for _, kv := range testSortedListStr {
-		if err = db.Update(func(txn *Txn) (err error) {
+		if err = db.Update(func(txn Txn) (err error) {
 			var bkt *Bucket
 			if bkt, err = txn.CreateBucket(testBktName); err != nil {
 				return
@@ -186,7 +199,7 @@ func BenchmarkWhiskeyGet(b *testing.B) {
 
 	for _, kv := range testSortedListStr {
 
-		if err = db.Update(func(txn *Txn) (err error) {
+		if err = db.Update(func(txn Txn) (err error) {
 			var bkt *Bucket
 			if bkt, err = txn.CreateBucket(testBktName); err != nil {
 				return
@@ -208,8 +221,12 @@ func BenchmarkWhiskeyGet(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for _, kv := range testSortedListStr {
-			db.Read(func(txn *Txn) (err error) {
-				bkt := txn.Bucket(testBktName)
+			db.Read(func(txn Txn) (err error) {
+				var bkt *Bucket
+				if bkt, err = txn.Bucket(testBktName); err != nil {
+					return
+				}
+
 				testVal, err = bkt.Get(kv.Val)
 				return
 			})
@@ -239,7 +256,7 @@ func BenchmarkWhiskeyPut(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for _, kv := range testSortedListStr {
-			if err = db.Update(func(txn *Txn) (err error) {
+			if err = db.Update(func(txn Txn) (err error) {
 				var bkt *Bucket
 				if bkt, err = txn.CreateBucket(testBktName); err != nil {
 					return
@@ -274,7 +291,7 @@ func BenchmarkWhiskeyBatchPut(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		if err = db.Update(func(txn *Txn) (err error) {
+		if err = db.Update(func(txn Txn) (err error) {
 			var bkt *Bucket
 			if bkt, err = txn.CreateBucket(testBktName); err != nil {
 				return
