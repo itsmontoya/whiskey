@@ -1,23 +1,32 @@
 package whiskey
 
+import (
+	"github.com/missionMeteora/journaler"
+)
+
 // newbackend will return a new Mmap
 func newbackend(a *allocator) *backend {
+	journaler.Debug("New backend!")
 	var b backend
 	b.a = a
-	b.offset = -1
-	b.sz = -1
 	return &b
 }
 
-// backend manages the memory mapped file
-type backend struct {
-	a      *allocator
-	bs     []byte
+type pair struct {
 	offset int64
 	sz     int64
 }
 
+// backend manages the memory mapped file
+type backend struct {
+	a *allocator
+	p pair
+
+	bs []byte
+}
+
 func (b *backend) Grow(sz int64) (bs []byte) {
+	journaler.Debug("Growing! %v", sz)
 	cap := int64(len(b.bs))
 	if sz <= cap {
 		return b.bs
@@ -30,41 +39,41 @@ func (b *backend) Grow(sz int64) (bs []byte) {
 		grew   bool
 	)
 
-	if bs, offset, grew = b.a.allocate(sz); grew && b.offset != -1 {
-		b.bs = b.a.mm[b.offset:]
+	journaler.Debug("SIZE?: %v / %#v", sz, b.p)
+	if bs, offset, grew = b.a.allocate(sz); grew {
+		b.bs = b.a.mm[b.p.offset:]
 	}
 
-	if b.offset != -1 {
+	if b.p.offset != -1 {
 		// Copy old bytes to new byteslice
 		copy(bs, b.bs)
 		// Release old bytes to allocator
-		b.a.release(b.offset, b.sz)
+		b.a.release(b.p.offset, b.p.sz)
 	}
 
 	// Update byteslice reference
 	b.bs = bs
 	// Update offset
-	b.offset = offset
+	b.p.offset = offset
 	// Update size
-	b.sz = int64(len(bs))
+	b.p.sz = int64(len(bs))
 	return
 }
 
 func (b *backend) dup() (out *backend) {
 	out = newbackend(b.a)
-	out.Grow(b.sz)
+	out.Grow(b.p.sz)
 	copy(out.bs, b.bs)
+	journaler.Debug("New backend! %#v", out)
 	return
 }
 
 // Close will close an backend
 func (b *backend) Close() (err error) {
 	// Release old bytes to allocator
-	b.a.release(b.offset, b.sz)
+	b.a.release(b.p.offset, b.p.sz)
 	b.a = nil
 	b.bs = nil
-	b.offset = -1
-	b.sz = -1
 	return
 }
 
