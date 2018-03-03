@@ -1,12 +1,7 @@
 package whiskey
 
-import (
-	"github.com/missionMeteora/journaler"
-)
-
 // newbackend will return a new Mmap
 func newbackend(a *allocator) *backend {
-	journaler.Debug("New backend!")
 	var b backend
 	b.a = a
 	return &b
@@ -30,7 +25,6 @@ func (b *backend) setBytes() {
 }
 
 func (b *backend) Grow(sz int64) (bs []byte) {
-	journaler.Debug("Growing! %v / %v", sz, b.bs)
 	cap := int64(len(b.bs))
 	if sz <= cap {
 		return b.bs
@@ -43,7 +37,6 @@ func (b *backend) Grow(sz int64) (bs []byte) {
 		grew   bool
 	)
 
-	journaler.Debug("SIZE?: %v / %#v", sz, b.p)
 	if bs, offset, grew = b.a.allocate(sz); grew {
 		b.setBytes()
 	}
@@ -68,7 +61,6 @@ func (b *backend) dup() (out *backend) {
 	out = newbackend(b.a)
 	out.Grow(b.p.sz)
 	copy(out.bs, b.bs)
-	journaler.Debug("New backend! %#v", out)
 	return
 }
 

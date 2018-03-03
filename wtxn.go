@@ -52,7 +52,6 @@ func (t *WTxn) getBucket(key []byte) (bp *Bucket, err error) {
 }
 
 func (t *WTxn) grow(key []byte, sz int64) (bs []byte) {
-	//	journaler.Debug("Growing scratch: %d", sz)
 	return t.t.Grow(key, sz)
 }
 

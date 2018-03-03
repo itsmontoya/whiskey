@@ -53,7 +53,9 @@ func benchPutWhiskey(b *testing.B, size int64, val []byte) {
 	db := openWhiskeyEnv(dbPath)
 	defer db.Close()
 
-	txn, txnClose := db.UpdateTxn()
+	txn, txnClose, err := db.UpdateTxn()
+	checkErr(err)
+
 	bucket, err := txn.CreateBucket(benchBucket)
 	checkErr(err)
 
@@ -75,13 +77,15 @@ func benchPutWhiskey(b *testing.B, size int64, val []byte) {
 		key := randKey()
 		checkErr(bucket.Put(key, val))
 		if i%batch == 0 {
-			checkErr(txn.Commit())
+			//	checkErr(txn.Commit())
 			txnClose()
-			txn, txnClose = db.UpdateTxn()
-			bucket = txn.Bucket(benchBucket)
+			txn, txnClose, err = db.UpdateTxn()
+			checkErr(err)
+			bucket, err = txn.Bucket(benchBucket)
+			checkErr(err)
 		}
 		if i == b.N-1 {
-			checkErr(txn.Commit())
+			//			checkErr(txn.Commit())
 			txnClose()
 			// print the duration of the last run
 			log.Println("last put took:", time.Now().Sub(t0))

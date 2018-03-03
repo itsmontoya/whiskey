@@ -4,15 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"sync/atomic"
 	"testing"
-
-	"github.com/missionMeteora/journaler"
 
 	"github.com/bmatsuo/lmdb-go/lmdb"
 	"github.com/boltDB/bolt"
 
-	"github.com/itsmontoya/rbt"
 	"github.com/itsmontoya/rbt/testUtils"
 	"github.com/missionMeteora/toolkit/errors"
 )
@@ -46,8 +42,6 @@ func TestWhiskey(t *testing.T) {
 	}
 	//defer db.Close()
 
-	journaler.Debug("OH YES?: %v", db.wb.bs)
-
 	if err = db.Update(func(txn Txn) (err error) {
 		var bkt *Bucket
 		if bkt, err = txn.CreateBucket([]byte("basic")); err != nil {
@@ -70,8 +64,6 @@ func TestWhiskey(t *testing.T) {
 			return
 		}
 
-		journaler.Debug("THIS IS IT? %s", string(val))
-
 		if string(val) != "Josh" {
 			return fmt.Errorf("invalid value, expected Josh and received %s", string(val))
 		}
@@ -80,9 +72,6 @@ func TestWhiskey(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-
-	checkTree := (*rbt.Tree)(atomic.LoadPointer(&db.tree))
-	journaler.Debug("Post-write check: %v", checkTree)
 
 	if err = db.Read(func(txn Txn) (err error) {
 		var bkt *Bucket
@@ -108,13 +97,9 @@ func TestWhiskey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	journaler.Debug("Post-read check: %v", db.wb.bs)
-
 	if err = db.Close(); err != nil {
 		t.Fatal(err)
 	}
-
-	journaler.Debug("\n\n\nClosed! About to open\n\n\n")
 
 	if db, err = New("./testing", "data.db"); err != nil {
 		t.Fatal(err)

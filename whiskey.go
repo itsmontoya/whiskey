@@ -6,7 +6,6 @@ import (
 	"unsafe"
 
 	"github.com/itsmontoya/rbt"
-	"github.com/missionMeteora/journaler"
 	"github.com/missionMeteora/toolkit/errors"
 )
 
@@ -75,7 +74,6 @@ func (db *DB) Read(fn TxnFn) (err error) {
 	var txn RTxn
 	txn.t = (*rbt.Tree)(atomic.LoadPointer(&db.tree))
 
-	journaler.Debug("Yay! %v", txn.t)
 	db.mux.RLock()
 	defer db.mux.RUnlock()
 	err = fn(&txn)
@@ -96,9 +94,8 @@ func (db *DB) ReadTxn(fn TxnFn) (tp Txn, close func()) {
 // Update will return an update transaction
 func (db *DB) Update(fn TxnFn) (err error) {
 	var txn WTxn
-	journaler.Debug("MASTER? %v", db.wb)
 	b := db.wb.dup()
-	journaler.Debug("YAS %v", b)
+
 	if txn.t, err = rbt.NewRaw(InitialSize, func(sz int64) (bs []byte) {
 		bs = b.Grow(sz)
 		db.p = (*pair)(unsafe.Pointer(&db.a.mm[metaSize]))
@@ -121,13 +118,7 @@ func (db *DB) Update(fn TxnFn) (err error) {
 			return
 		}
 
-		dbt := (*rbt.Tree)(atomic.LoadPointer(&db.tree))
-		journaler.Debug("It's ovah!\n%v\n%v\n\n", dbt, txn.t)
-
 		atomic.StorePointer(&db.tree, unsafe.Pointer(txn.t))
-		dbt = (*rbt.Tree)(atomic.LoadPointer(&db.tree))
-		journaler.Debug("It's more ovah!\n%v\n%v\n\n", dbt)
-
 		db.wb = b
 		db.p.offset = b.p.offset
 		db.p.sz = b.p.sz
@@ -164,8 +155,6 @@ func (db *DB) UpdateTxn() (tp Txn, close func(), err error) {
 
 // Close will close an instance of DB
 func (db *DB) Close() (err error) {
-	journaler.Debug("Close Pair? %v", db.wb.p)
-
 	var errs errors.ErrorList
 	db.mux.Lock()
 	defer db.mux.Unlock()

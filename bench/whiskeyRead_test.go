@@ -41,7 +41,8 @@ func benchGetWhiskey(b *testing.B, size uint, val []byte) {
 	defer db.Close()
 
 	txn, txnClose := db.ReadTxn(nil)
-	bucket := txn.Bucket(benchBucket)
+	bucket, err := txn.Bucket(benchBucket)
+	checkErr(err)
 
 	b.SetBytes(int64(len(val)))
 	b.ResetTimer()
