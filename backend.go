@@ -60,6 +60,7 @@ func (b *backend) Grow(sz int64) (bs []byte) {
 func (b *backend) dup() (out *backend) {
 	out = newbackend(b.a)
 	out.Grow(b.p.sz)
+	b.setBytes()
 	copy(out.bs, b.bs)
 	return
 }
