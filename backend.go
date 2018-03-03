@@ -25,8 +25,12 @@ type backend struct {
 	bs []byte
 }
 
+func (b *backend) setBytes() {
+	b.bs = b.a.mm[b.p.offset : b.p.offset+b.p.sz]
+}
+
 func (b *backend) Grow(sz int64) (bs []byte) {
-	journaler.Debug("Growing! %v", sz)
+	journaler.Debug("Growing! %v / %v", sz, b.bs)
 	cap := int64(len(b.bs))
 	if sz <= cap {
 		return b.bs
@@ -41,7 +45,7 @@ func (b *backend) Grow(sz int64) (bs []byte) {
 
 	journaler.Debug("SIZE?: %v / %#v", sz, b.p)
 	if bs, offset, grew = b.a.allocate(sz); grew {
-		b.bs = b.a.mm[b.p.offset:]
+		b.setBytes()
 	}
 
 	if b.p.offset != -1 {
