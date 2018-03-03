@@ -38,11 +38,11 @@ func New(dir, name string) (dbp *DB, err error) {
 	db.wb = newbackend(db.a)
 	if db.a.m.tail == metaSize {
 		db.a.m.tail += pairSize
+	} else {
+		db.p = (*pair)(unsafe.Pointer(&db.a.mm[metaSize]))
+		db.wb.p = *db.p
+		db.wb.setBytes()
 	}
-
-	db.p = (*pair)(unsafe.Pointer(&db.a.mm[metaSize]))
-
-	journaler.Debug("Open Pair? %v", db.wb.p)
 	var tree *rbt.Tree
 	if tree, err = rbt.NewRaw(InitialSize, func(sz int64) (bs []byte) {
 		bs = db.wb.Grow(sz)
