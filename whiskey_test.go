@@ -120,13 +120,17 @@ func TestWhiskey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = db.Update(func(txn Txn) (err error) {
+	if err = db.Read(func(txn Txn) (err error) {
 		var bkt *Bucket
-		if bkt, err = txn.CreateBucket([]byte("basic")); err != nil {
+		if bkt, err = txn.Bucket([]byte("basic")); err != nil {
 			return
 		}
 
-		val, _ := bkt.Get([]byte("name"))
+		var val []byte
+		if val, err = bkt.Get([]byte("name")); err != nil {
+			return
+		}
+
 		if string(val) != "Josh" {
 			return fmt.Errorf("invalid value, expected Josh and received %s", string(val))
 		}
@@ -135,6 +139,7 @@ func TestWhiskey(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+
 }
 
 func TestPut(t *testing.T) {
