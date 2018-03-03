@@ -17,6 +17,7 @@ const RW = os.O_CREATE | os.O_RDWR
 const ROnly = os.O_RDONLY
 
 const metaSize = int64(unsafe.Sizeof(meta{}))
+const pairSize = int64(unsafe.Sizeof(pair{}))
 
 // newallocator will return a new Mmap
 func newallocator(dir, name string, perms int) (ap *allocator, err error) {
@@ -27,10 +28,12 @@ func newallocator(dir, name string, perms int) (ap *allocator, err error) {
 
 	a.grow(metaSize)
 	a.setMeta()
+	journaler.Debug("Oh, new ALLOCATOR: %#v", a.m)
 	if a.m.tail == 0 {
 		a.m.tail = metaSize
 	}
 
+	journaler.Debug("Oh, new-ish ALLOCATOR: %#v", a.m)
 	ap = &a
 	return
 }
@@ -93,6 +96,7 @@ func (a *allocator) grow(sz int64) {
 }
 
 func (a *allocator) allocate(sz int64) (bs []byte, offset int64, grew bool) {
+	journaler.Debug("Allocating: %v", sz)
 	offset = a.m.tail
 	if a.m.tail += sz; a.cap <= a.m.tail {
 		a.grow(a.m.tail)
