@@ -27,12 +27,15 @@ const (
 
 // New will return a new DB
 func New(dir, name string) (dbp *DB, err error) {
+	return NewWithSize(dir, name, InitialSize)
+}
+
+// NewWithSize will return a new DB with a requested minimum size
+func NewWithSize(dir, name string, sz int64) (dbp *DB, err error) {
 	var db DB
-	if db.a, err = newallocator(dir, name, RW); err != nil {
+	if db.a, err = newallocator(dir, name, RW, sz); err != nil {
 		return
 	}
-
-	db.a.grow(InitialSize)
 
 	db.wb = newbackend(db.a)
 	if db.a.m.tail == metaSize {
@@ -42,6 +45,7 @@ func New(dir, name string) (dbp *DB, err error) {
 		db.wb.p = *db.p
 		db.wb.setBytes()
 	}
+
 	var tree *rbt.Tree
 	if tree, err = rbt.NewRaw(InitialSize, func(sz int64) (bs []byte) {
 		bs = db.wb.Grow(sz)
@@ -52,6 +56,7 @@ func New(dir, name string) (dbp *DB, err error) {
 	}
 
 	db.tree = unsafe.Pointer(tree)
+	db.txn = db.newTxn(tree)
 	dbp = &db
 	return
 }
@@ -65,18 +70,56 @@ type DB struct {
 
 	tree unsafe.Pointer
 
-	rtxn Txn
-	wtxn Txn
+	txn *RTxn
+}
+
+func (db *DB) loadTxn() *RTxn {
+	ptr := unsafe.Pointer(db.txn)
+	return (*RTxn)(atomic.LoadPointer(&ptr))
+}
+
+func (db *DB) swapTxn(txn *RTxn) (old *RTxn) {
+	ptr := unsafe.Pointer(&db.txn)
+	uptr := (*unsafe.Pointer)(ptr)
+	return (*RTxn)(atomic.SwapPointer(uptr, unsafe.Pointer(txn)))
+}
+
+func (db *DB) newTxn(t *rbt.Tree) *RTxn {
+	var rtxn RTxn
+	rtxn.p = *db.p
+	rtxn.t = t
+	rtxn.readers = 1
+	return &rtxn
+}
+
+func (db *DB) initTxn(t *rbt.Tree) {
+	rtxn := db.newTxn(t)
+	old := db.swapTxn(rtxn)
+	old.decReaders()
+	db.releaseReader(old)
+}
+
+func (db *DB) releaseReader(txn *RTxn) {
+	readers := txn.decReaders()
+	if readers > 0 {
+		return
+	}
+
+	db.a.release(txn.p.offset, txn.p.sz)
 }
 
 // Read will return a read transaction
 func (db *DB) Read(fn TxnFn) (err error) {
-	var txn RTxn
-	txn.t = (*rbt.Tree)(atomic.LoadPointer(&db.tree))
-
 	db.mux.RLock()
-	defer db.mux.RUnlock()
-	err = fn(&txn)
+	txn := db.loadTxn()
+	txn.incReaders()
+
+	defer func() {
+		db.releaseReader(txn)
+		db.mux.RUnlock()
+	}()
+
+	err = fn(txn)
 	return
 }
 
@@ -122,17 +165,17 @@ func (db *DB) Update(fn TxnFn) (err error) {
 		db.wb = b
 		db.p.offset = b.p.offset
 		db.p.sz = b.p.sz
+
+		db.initTxn(txn.t)
 	}()
 
 	return
 }
 
 // UpdateTxn will return an update transaction
-func (db *DB) UpdateTxn() (tp Txn, close func(), err error) {
+func (db *DB) UpdateTxn() (tp Txn, close func(commit bool), err error) {
 	var txn WTxn
-	ptr := unsafe.Pointer(db.wb)
-	master := (*backend)(atomic.LoadPointer(&ptr))
-	b := master.dup()
+	b := db.wb.dup()
 
 	if txn.t, err = rbt.NewRaw(InitialSize, func(sz int64) (bs []byte) {
 		bs = b.Grow(sz)
@@ -145,13 +188,17 @@ func (db *DB) UpdateTxn() (tp Txn, close func(), err error) {
 	db.mux.Lock()
 	tp = &txn
 
-	close = func() {
-		atomic.StorePointer(&db.tree, unsafe.Pointer(txn.t))
-		db.wb = b
-		db.p.offset = b.p.offset
-		db.p.sz = b.p.sz
+	close = func(commit bool) {
+		if commit {
+			atomic.StorePointer(&db.tree, unsafe.Pointer(txn.t))
+			db.wb = b
+			db.p.offset = b.p.offset
+			db.p.sz = b.p.sz
+
+			db.initTxn(txn.t)
+		}
+
 		db.mux.Unlock()
-		return
 	}
 
 	return
