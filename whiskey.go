@@ -46,16 +46,17 @@ func NewWithSize(dir, name string, sz int64) (dbp *DB, err error) {
 		db.wb.setBytes()
 	}
 
+	b := db.wb
+
 	var tree *rbt.Tree
 	if tree, err = rbt.NewRaw(InitialSize, func(sz int64) (bs []byte) {
-		bs = db.wb.Grow(sz)
+		bs = b.Grow(sz)
 		db.p = (*pair)(unsafe.Pointer(&db.a.mm[metaSize]))
 		return
-	}, db.wb.Close); err != nil {
+	}, b.Close); err != nil {
 		return
 	}
 
-	db.tree = unsafe.Pointer(tree)
 	db.txn = db.newTxn(tree)
 	dbp = &db
 	return
@@ -67,8 +68,6 @@ type DB struct {
 	a   *allocator
 	p   *pair
 	wb  *backend
-
-	tree unsafe.Pointer
 
 	txn *RTxn
 }
@@ -95,8 +94,8 @@ func (db *DB) newTxn(t *rbt.Tree) *RTxn {
 func (db *DB) initTxn(t *rbt.Tree) {
 	rtxn := db.newTxn(t)
 	old := db.swapTxn(rtxn)
-	old.decReaders()
 	db.releaseReader(old)
+	old.t.Close()
 }
 
 func (db *DB) releaseReader(txn *RTxn) {
@@ -124,31 +123,37 @@ func (db *DB) Read(fn TxnFn) (err error) {
 }
 
 // ReadTxn will return a read transaction
-func (db *DB) ReadTxn(fn TxnFn) (tp Txn, close func()) {
-	var txn RTxn
-	txn.t = (*rbt.Tree)(atomic.LoadPointer(&db.tree))
+func (db *DB) ReadTxn(fn TxnFn) (txn Txn, close func()) {
+	db.mux.RLock()
+
+	rtxn := db.loadTxn()
+	rtxn.incReaders()
 
 	db.mux.RLock()
-	close = db.mux.RUnlock
-	tp = &txn
+	close = func() {
+		db.releaseReader(rtxn)
+		db.mux.RUnlock()
+	}
+
+	txn = rtxn
 	return
 }
 
 // Update will return an update transaction
 func (db *DB) Update(fn TxnFn) (err error) {
 	var txn WTxn
+	db.mux.Lock()
+	defer db.mux.Unlock()
 	b := db.wb.dup()
 
 	if txn.t, err = rbt.NewRaw(InitialSize, func(sz int64) (bs []byte) {
 		bs = b.Grow(sz)
 		db.p = (*pair)(unsafe.Pointer(&db.a.mm[metaSize]))
 		return
-	}, db.wb.Close); err != nil {
+	}, b.Close); err != nil {
 		return
 	}
 
-	db.mux.Lock()
-	defer db.mux.Unlock()
 	// This anon function might seem ridiculous, but for some reason not having the function caused
 	// a performance regression, see below:
 	// # Function removed
@@ -157,15 +162,13 @@ func (db *DB) Update(fn TxnFn) (err error) {
 	// BenchmarkWhiskeyPut-16      1000      2073500 ns/op      376022 B/op      12000 allocs/op
 	func() {
 		if err = fn(&txn); err != nil {
-			b.Close()
+			txn.t.Close()
 			return
 		}
 
-		atomic.StorePointer(&db.tree, unsafe.Pointer(txn.t))
 		db.wb = b
 		db.p.offset = b.p.offset
 		db.p.sz = b.p.sz
-
 		db.initTxn(txn.t)
 	}()
 
@@ -175,22 +178,21 @@ func (db *DB) Update(fn TxnFn) (err error) {
 // UpdateTxn will return an update transaction
 func (db *DB) UpdateTxn() (tp Txn, close func(commit bool), err error) {
 	var txn WTxn
+	db.mux.Lock()
 	b := db.wb.dup()
 
 	if txn.t, err = rbt.NewRaw(InitialSize, func(sz int64) (bs []byte) {
 		bs = b.Grow(sz)
 		db.p = (*pair)(unsafe.Pointer(&db.a.mm[metaSize]))
 		return
-	}, db.wb.Close); err != nil {
+	}, b.Close); err != nil {
 		return
 	}
 
-	db.mux.Lock()
 	tp = &txn
 
 	close = func(commit bool) {
 		if commit {
-			atomic.StorePointer(&db.tree, unsafe.Pointer(txn.t))
 			db.wb = b
 			db.p.offset = b.p.offset
 			db.p.sz = b.p.sz
@@ -209,10 +211,6 @@ func (db *DB) Close() (err error) {
 	var errs errors.ErrorList
 	db.mux.Lock()
 	defer db.mux.Unlock()
-	tree := (*rbt.Tree)(atomic.LoadPointer(&db.tree))
-	errs.Push(tree.Close())
-
-	errs.Push(db.wb.Close())
 	errs.Push(db.a.Close())
 	return errs.Err()
 }
