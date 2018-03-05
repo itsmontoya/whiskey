@@ -43,6 +43,8 @@ type allocator struct {
 
 	m   *meta
 	cap int64
+
+	fl freelist
 }
 
 func (a *allocator) setMeta() {
@@ -94,6 +96,12 @@ func (a *allocator) grow(sz int64) {
 }
 
 func (a *allocator) allocate(sz int64) (bs []byte, offset int64, grew bool) {
+	// Attempt to allocate from freelist first
+	if offset = a.fl.acquire(sz); offset != -1 {
+		bs = a.mm[offset : offset+sz]
+		return
+	}
+
 	offset = a.m.tail
 	if a.m.tail += sz; a.cap <= a.m.tail {
 		a.grow(a.m.tail)
@@ -105,7 +113,7 @@ func (a *allocator) allocate(sz int64) (bs []byte, offset int64, grew bool) {
 }
 
 func (a *allocator) release(offset, sz int64) {
-
+	a.fl.release(offset, sz)
 }
 
 // Close will close an allocator
