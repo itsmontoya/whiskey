@@ -10,17 +10,7 @@ import (
 type WTxn struct {
 	t *rbt.Tree
 
-	kbuf []byte
 	bkts []*Bucket
-}
-
-func (t *WTxn) setKeyBuffer(key []byte) {
-	// Reset before using
-	t.kbuf = t.kbuf[:0]
-	// Append bucket prefix
-	t.kbuf = append(t.kbuf, bucketPrefix)
-	// Append key
-	t.kbuf = append(t.kbuf, key...)
 }
 
 func (t *WTxn) newBucket(key []byte) (bp *Bucket, err error) {
@@ -57,18 +47,17 @@ func (t *WTxn) grow(key []byte, sz int64) (bs []byte) {
 
 // Bucket will return a bucket for a provided key
 func (t *WTxn) Bucket(key []byte) (bp *Bucket, err error) {
-	t.setKeyBuffer(key)
-	return t.getBucket(t.kbuf)
+	return t.getBucket(getBucketKey(key))
 }
 
 // CreateBucket will create a bucket for a provided key
 func (t *WTxn) CreateBucket(key []byte) (bp *Bucket, err error) {
-	t.setKeyBuffer(key)
-	if bp, err = t.getBucket(t.kbuf); err != nil {
+	key = getBucketKey(key)
+	if bp, err = t.getBucket(key); err != nil {
 		return
 	}
 
-	return t.newBucket(t.kbuf)
+	return t.newBucket(key)
 }
 
 // Get will retrieve a value for a given key

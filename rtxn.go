@@ -13,18 +13,6 @@ const (
 // RTxn is a transaction type
 type RTxn struct {
 	t *rbt.Tree
-
-	kbuf []byte
-	bkts []*Bucket
-}
-
-func (t *RTxn) setKeyBuffer(key []byte) {
-	// Reset before using
-	t.kbuf = t.kbuf[:0]
-	// Append bucket prefix
-	t.kbuf = append(t.kbuf, bucketPrefix)
-	// Append key
-	t.kbuf = append(t.kbuf, key...)
 }
 
 func (t *RTxn) grow(key []byte, sz int64) (bs []byte) {
@@ -48,15 +36,15 @@ func (t *RTxn) getBucket(key []byte) (*Bucket, error) {
 
 // Bucket will return a bucket for a provided key
 func (t *RTxn) Bucket(key []byte) (bp *Bucket, err error) {
-	t.setKeyBuffer(key)
-	bs := t.t.Get(t.kbuf)
+	key = getBucketKey(key)
+	bs := t.t.Get(key)
 	if bs == nil {
 		// Bucket does not exist, bail out!
 		err = ErrKeyDoesNotExist
 		return
 	}
 
-	return t.getBucket(t.kbuf)
+	return t.getBucket(key)
 }
 
 // CreateBucket will create a bucket for a provided key
@@ -82,4 +70,11 @@ func (t *RTxn) Put(key []byte, val []byte) (err error) {
 // Delete remove a value for a given key
 func (t *RTxn) Delete(key []byte) (err error) {
 	return ErrCannotWrite
+}
+
+func getBucketKey(key []byte) (prepended []byte) {
+	prepended = make([]byte, len(key)+1)
+	prepended[0] = bucketPrefix
+	copy(prepended[1:], key)
+	return
 }
