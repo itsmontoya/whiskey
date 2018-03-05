@@ -1,6 +1,8 @@
 package whiskey
 
 import (
+	"sync/atomic"
+
 	"github.com/itsmontoya/rbt"
 	"github.com/missionMeteora/toolkit/errors"
 )
@@ -13,6 +15,17 @@ const (
 // RTxn is a transaction type
 type RTxn struct {
 	t *rbt.Tree
+
+	readers int64
+	stale   bool
+}
+
+func (t *RTxn) incReaders() (new int64) {
+	return atomic.AddInt64(&t.readers, 1)
+}
+
+func (t *RTxn) decReaders() (new int64) {
+	return atomic.AddInt64(&t.readers, -1)
 }
 
 func (t *RTxn) grow(key []byte, sz int64) (bs []byte) {
