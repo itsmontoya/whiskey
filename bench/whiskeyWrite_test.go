@@ -9,12 +9,12 @@ import (
 	"github.com/itsmontoya/whiskey"
 )
 
-func openWhiskeyEnv(dbPath string) *whiskey.DB {
+func openWhiskeyEnv(dbPath string, size int64) *whiskey.DB {
 	if err := os.MkdirAll(dbPath, 0755); err != nil {
 		log.Fatalln(err)
 	}
 
-	db, err := whiskey.New(dbPath, "benchmark")
+	db, err := whiskey.NewWithSize(dbPath, "benchmark", size)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -32,7 +32,7 @@ func BenchmarkPutSmall_Whiskey(b *testing.B) {
 	}()
 
 	log.Printf("bench put SMALL (8KB), take %d (n=%d)\n", take, b.N)
-	benchPutWhiskey(b, 20*GB, SmallVal)
+	benchPutWhiskey(b, 2*GB, SmallVal)
 }
 
 func BenchmarkPutLarge_Whiskey(b *testing.B) {
@@ -50,7 +50,7 @@ func BenchmarkPutLarge_Whiskey(b *testing.B) {
 
 func benchPutWhiskey(b *testing.B, size int64, val []byte) {
 	defer rmDB(dbPath)
-	db := openWhiskeyEnv(dbPath)
+	db := openWhiskeyEnv(dbPath, size)
 	defer db.Close()
 
 	txn, txnClose, err := db.UpdateTxn()
@@ -78,15 +78,14 @@ func benchPutWhiskey(b *testing.B, size int64, val []byte) {
 		checkErr(bucket.Put(key, val))
 		if i%batch == 0 {
 			//	checkErr(txn.Commit())
-			txnClose()
+			txnClose(true)
 			txn, txnClose, err = db.UpdateTxn()
 			checkErr(err)
 			bucket, err = txn.Bucket(benchBucket)
 			checkErr(err)
 		}
 		if i == b.N-1 {
-			//			checkErr(txn.Commit())
-			txnClose()
+			txnClose(true)
 			// print the duration of the last run
 			log.Println("last put took:", time.Now().Sub(t0))
 			log.Println("last key:", string(key))
