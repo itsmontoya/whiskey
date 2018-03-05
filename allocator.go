@@ -114,7 +114,20 @@ func (a *allocator) allocate(sz int64) (bs []byte, offset int64, grew bool) {
 }
 
 func (a *allocator) release(offset, sz int64) {
+	if sz == 0 {
+		return
+	}
+
+	a.clean(offset, sz)
 	a.fl.release(offset, sz)
+}
+
+func (a *allocator) clean(offset, sz int64) {
+	bs := a.mm[offset : offset+sz]
+	// Change every byte in this set to 0
+	for i := range bs {
+		bs[i] = 0
+	}
 }
 
 // Close will close an allocator
