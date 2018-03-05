@@ -22,7 +22,7 @@ const (
 
 const (
 	// InitialSize is the initial DB size
-	InitialSize = 32
+	InitialSize = 1024
 )
 
 // New will return a new DB
@@ -146,6 +146,10 @@ func (db *DB) UpdateTxn() (tp Txn, close func(), err error) {
 	tp = &txn
 
 	close = func() {
+		atomic.StorePointer(&db.tree, unsafe.Pointer(txn.t))
+		db.wb = b
+		db.p.offset = b.p.offset
+		db.p.sz = b.p.sz
 		db.mux.Unlock()
 		return
 	}
