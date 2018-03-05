@@ -40,7 +40,7 @@ func TestWhiskey(t *testing.T) {
 	if db, err = New("./testing", "data.db"); err != nil {
 		t.Fatal(err)
 	}
-	//defer db.Close()
+	defer db.Close()
 
 	if err = db.Update(func(txn Txn) (err error) {
 		var bkt *Bucket
@@ -143,8 +143,8 @@ func TestPut(t *testing.T) {
 	}
 	defer db.Close()
 
-	for _, kv := range testSortedListStr {
-		if err = db.Update(func(txn Txn) (err error) {
+	if err = db.Update(func(txn Txn) (err error) {
+		for _, kv := range testSortedListStr {
 			var bkt *Bucket
 			if bkt, err = txn.CreateBucket(testBktName); err != nil {
 				return
@@ -162,13 +162,12 @@ func TestPut(t *testing.T) {
 			if !bytes.Equal(kv.Val, val) {
 				t.Fatalf("invalid value, expected \"%s\" and received \"%s\"", string(kv.Val), string(val))
 			}
-
-			return
-		}); err != nil {
-			t.Fatal(err)
 		}
-	}
 
+		return
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func BenchmarkWhiskeyGet(b *testing.B) {
@@ -187,26 +186,26 @@ func BenchmarkWhiskeyGet(b *testing.B) {
 	}
 	defer db.Close()
 
-	for _, kv := range testSortedListStr {
+	if err = db.Update(func(txn Txn) (err error) {
+		var bkt *Bucket
+		if bkt, err = txn.CreateBucket(testBktName); err != nil {
+			return
+		}
 
-		if err = db.Update(func(txn Txn) (err error) {
-			var bkt *Bucket
-			if bkt, err = txn.CreateBucket(testBktName); err != nil {
-				return
-			}
+		for _, kv := range testSortedListStr {
 
 			if err = bkt.Put(kv.Val, kv.Val); err != nil {
 				return
 			}
 
 			return
-		}); err != nil {
-			b.Fatal(err)
 		}
 
+		return
+	}); err != nil {
+		b.Fatal(err)
 	}
 
-	//	return
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
