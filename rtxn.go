@@ -15,9 +15,9 @@ const (
 // RTxn is a transaction type
 type RTxn struct {
 	t *rbt.Tree
+	p pair
 
 	readers int64
-	stale   bool
 }
 
 func (t *RTxn) incReaders() (new int64) {
