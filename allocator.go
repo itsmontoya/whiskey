@@ -20,13 +20,14 @@ const metaSize = int64(unsafe.Sizeof(meta{}))
 const pairSize = int64(unsafe.Sizeof(pair{}))
 
 // newallocator will return a new Mmap
-func newallocator(dir, name string, perms int) (ap *allocator, err error) {
+func newallocator(dir, name string, perms int, sz int64) (ap *allocator, err error) {
 	var a allocator
 	if a.f, err = os.OpenFile(path.Join(dir, name), perms, 0644); err != nil {
 		return
 	}
 
-	a.grow(metaSize)
+	sz += metaSize
+	a.grow(sz)
 	a.setMeta()
 	if a.m.tail == 0 {
 		a.m.tail = metaSize

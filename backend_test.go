@@ -18,7 +18,7 @@ func TestBackend(t *testing.T) {
 	}
 	defer os.RemoveAll("./testing")
 
-	if a, err = newallocator("./testing", "allocator", RW); err != nil {
+	if a, err = newallocator("./testing", "allocator", RW, InitialSize); err != nil {
 		t.Fatal(err)
 	}
 	defer a.Close()
