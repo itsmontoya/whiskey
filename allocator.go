@@ -5,6 +5,8 @@ import (
 	"path"
 	"unsafe"
 
+	"github.com/itsmontoya/rbt"
+
 	mmap "github.com/edsrzf/mmap-go"
 	"github.com/missionMeteora/journaler"
 	"github.com/missionMeteora/toolkit/errors"
@@ -118,7 +120,7 @@ func (a *allocator) release(offset, sz int64) {
 		return
 	}
 
-	a.clean(offset, sz)
+	a.clean(offset, rbt.TrunkSize)
 	a.fl.release(offset, sz)
 }
 
