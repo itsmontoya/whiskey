@@ -124,7 +124,6 @@ func TestWhiskey(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-
 }
 
 func TestPut(t *testing.T) {
@@ -156,6 +155,44 @@ func TestPut(t *testing.T) {
 
 			var val []byte
 			if val, err = bkt.Get(kv.Val); err != nil {
+				return
+			}
+
+			if !bytes.Equal(kv.Val, val) {
+				t.Fatalf("invalid value, expected \"%s\" and received \"%s\"", string(kv.Val), string(val))
+			}
+		}
+
+		return
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRootPut(t *testing.T) {
+	var (
+		db  *DB
+		err error
+	)
+
+	if err = os.MkdirAll("./testing", 0755); err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll("./testing")
+
+	if db, err = New("./testing", "test_put"); err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	if err = db.Update(func(txn Txn) (err error) {
+		for _, kv := range testSortedListStr {
+			if err = txn.Put(kv.Val, kv.Val); err != nil {
+				return
+			}
+
+			var val []byte
+			if val, err = txn.Get(kv.Val); err != nil {
 				return
 			}
 
