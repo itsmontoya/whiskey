@@ -32,12 +32,16 @@ func (b *backend) Grow(sz int64) (bs []byte) {
 		cap = next32(sz)
 	}
 
+	for cap < sz {
+		cap *= 2
+	}
+
 	var (
 		offset int64
 		grew   bool
 	)
 
-	if bs, offset, grew = b.a.allocate(sz); grew {
+	if bs, offset, grew = b.a.allocate(cap); grew {
 		b.setBytes()
 	}
 
@@ -57,11 +61,17 @@ func (b *backend) Grow(sz int64) (bs []byte) {
 	return
 }
 
-func (b *backend) dup() (out *backend) {
+func (b *backend) dup(n int64) (out *backend) {
+	if n > b.p.sz {
+		// This should never happen, if it does - it's most certainly
+		// a programming error and should be caught in development
+		panic("invalid size!")
+	}
+
 	out = newbackend(b.a)
 	out.Grow(b.p.sz)
 	b.setBytes()
-	copy(out.bs, b.bs)
+	copy(out.bs, b.bs[:n])
 	return
 }
 
