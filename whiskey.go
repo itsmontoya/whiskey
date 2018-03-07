@@ -144,7 +144,7 @@ func (db *DB) Update(fn TxnFn) (err error) {
 	var txn WTxn
 	db.mux.Lock()
 	defer db.mux.Unlock()
-	b := db.wb.dup()
+	b := db.wb.dup(db.loadTxn().t.Size())
 
 	if txn.t, err = rbt.NewRaw(InitialSize, func(sz int64) (bs []byte) {
 		bs = b.Grow(sz)
@@ -179,7 +179,7 @@ func (db *DB) Update(fn TxnFn) (err error) {
 func (db *DB) UpdateTxn() (tp Txn, close func(commit bool), err error) {
 	var txn WTxn
 	db.mux.Lock()
-	b := db.wb.dup()
+	b := db.wb.dup(db.loadTxn().t.Size())
 
 	if txn.t, err = rbt.NewRaw(InitialSize, func(sz int64) (bs []byte) {
 		bs = b.Grow(sz)
