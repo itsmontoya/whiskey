@@ -34,7 +34,7 @@ func TestBackend(t *testing.T) {
 	bs[6] = 6
 	bs[7] = 7
 
-	nb := b.dup()
+	nb := b.dup(b.p.sz)
 	if !bytes.Equal(bs, nb.bs) {
 		t.Fatalf("Invalid value, expected \"%v\" and received \"%v\"", bs, nb.bs)
 	}
