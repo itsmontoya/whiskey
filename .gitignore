@@ -1,0 +1,4 @@
+*.pdf
+*.pprof
+*.test
+bench/bench
