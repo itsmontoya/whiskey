@@ -1,63 +1,61 @@
 package whiskey
 
 import (
-	"bytes"
-
 	"github.com/itsmontoya/rbt"
 )
 
 // WTxn is a transaction type
 type WTxn struct {
 	t *rbt.Tree
-
-	bkts []*Bucket
 }
 
-func (t *WTxn) newBucket(key []byte) (bp *Bucket, err error) {
-	var nt WTxn
-	bp = newBucket(key, t.grow)
-	if nt.t, err = rbt.NewRaw(bucketInitSize, bp.grow, nil); err != nil {
+func (t *WTxn) newBucket(key []byte) (bp *Bucket) {
+	return newBucket(key, t)
+}
+
+func (t *WTxn) bucket(key []byte) (bp *Bucket, err error) {
+	var bs []byte
+	if bs = t.t.Get(key); bs == nil {
+		err = ErrKeyDoesNotExist
 		return
 	}
 
-	bp.Txn = &nt
-	t.bkts = append(t.bkts, bp)
+	bp = t.newBucket(key)
 	return
 }
 
-func (t *WTxn) getBucket(key []byte) (bp *Bucket, err error) {
-	for _, b := range t.bkts {
-		if bytes.Equal(key, b.key) {
-			bp = b
-			return
-		}
-	}
-
-	var bs []byte
-	if bs = t.t.Get(key); bs == nil {
+// createBucket will create a bucket for a provided key
+func (t *WTxn) createBucket(key []byte) (bp *Bucket, err error) {
+	if bp, err = t.bucket(key); err == nil {
 		return
 	}
 
-	return t.newBucket(key)
+	t.t.Put(key, []byte{13})
+	return t.newBucket(key), nil
 }
 
-func (t *WTxn) grow(key []byte, sz int64) (bs []byte) {
-	return t.t.Grow(key, sz)
+func (t *WTxn) get(key []byte) (val []byte, err error) {
+	val = t.t.Get(key)
+	return
+}
+
+func (t *WTxn) put(key, val []byte) (err error) {
+	t.t.Put(key, val)
+	return
+}
+
+func (t *WTxn) delete(key []byte) (err error) {
+	return ErrCannotWrite
 }
 
 // Bucket will return a bucket for a provided key
 func (t *WTxn) Bucket(key []byte) (bp *Bucket, err error) {
-	return t.getBucket(getBucketKey(key))
+	return t.bucket(getBucketKey(key))
 }
 
 // CreateBucket will create a bucket for a provided key
 func (t *WTxn) CreateBucket(key []byte) (bp *Bucket, err error) {
-	key = getBucketKey(key)
-	if bp, err = t.getBucket(key); err != nil {
-		return
-	}
-
-	return t.newBucket(key)
+	return t.createBucket(getBucketKey(key))
 }
 
 // Get will retrieve a value for a given key
@@ -66,8 +64,7 @@ func (t *WTxn) Get(key []byte) (val []byte, err error) {
 		return nil, ErrInvalidKey
 	}
 
-	val = t.t.Get(key)
-	return
+	return t.get(key)
 }
 
 // Put will put a value for a given key
@@ -76,8 +73,7 @@ func (t *WTxn) Put(key []byte, val []byte) (err error) {
 		return ErrInvalidKey
 	}
 
-	t.t.Put(key, val)
-	return
+	return t.put(key, val)
 }
 
 // Delete remove a value for a given key
@@ -86,6 +82,5 @@ func (t *WTxn) Delete(key []byte) (err error) {
 		return ErrInvalidKey
 	}
 
-	t.t.Delete(key)
-	return
+	return t.delete(key)
 }

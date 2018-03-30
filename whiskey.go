@@ -6,6 +6,8 @@ import (
 	"unsafe"
 
 	"github.com/itsmontoya/rbt"
+	"github.com/itsmontoya/rbt/allocator"
+	"github.com/itsmontoya/rbt/backend"
 	"github.com/missionMeteora/toolkit/errors"
 )
 
@@ -33,31 +35,21 @@ func New(dir, name string) (dbp *DB, err error) {
 // NewWithSize will return a new DB with a requested minimum size
 func NewWithSize(dir, name string, sz int64) (dbp *DB, err error) {
 	var db DB
-	if db.a, err = newallocator(dir, name, RW, sz); err != nil {
+	if db.a, err = allocator.NewMMap(dir, name); err != nil {
 		return
 	}
 
-	db.wb = newbackend(db.a)
-	if db.a.m.tail == metaSize {
-		db.a.m.tail += pairSize
-	} else {
-		db.p = (*pair)(unsafe.Pointer(&db.a.mm[metaSize]))
-		db.wb.p = *db.p
-		db.wb.setBytes()
-	}
+	db.a.OnGrow(db.onGrow)
 
-	b := db.wb
+	db.mb = backend.NewMulti(db.a)
+	db.be = db.mb.Get()
 
-	var tree *rbt.Tree
-	if tree, err = rbt.NewRaw(InitialSize, func(sz int64) (bs []byte) {
-		bs = b.Grow(sz)
-		db.p = (*pair)(unsafe.Pointer(&db.a.mm[metaSize]))
-		return
-	}, b.Close); err != nil {
+	var t *rbt.Tree
+	if t, err = rbt.NewRaw(sz, db.be, db.a); err != nil {
 		return
 	}
 
-	db.txn = db.newTxn(tree)
+	db.txn = db.newTxn(t)
 	dbp = &db
 	return
 }
@@ -65,11 +57,19 @@ func NewWithSize(dir, name string, sz int64) (dbp *DB, err error) {
 // DB represents a database
 type DB struct {
 	mux sync.RWMutex
-	a   *allocator
-	p   *pair
-	wb  *backend
+	a   allocator.Allocator
+	mb  *backend.Multi
+	be  *backend.Backend
 
 	txn *RTxn
+}
+
+func (db *DB) onGrow() {
+	if db.be == nil {
+		return
+	}
+
+	db.mb.Set(db.be)
 }
 
 func (db *DB) loadTxn() *RTxn {
@@ -85,7 +85,6 @@ func (db *DB) swapTxn(txn *RTxn) (old *RTxn) {
 
 func (db *DB) newTxn(t *rbt.Tree) *RTxn {
 	var rtxn RTxn
-	rtxn.p = *db.p
 	rtxn.t = t
 	rtxn.readers = 1
 	return &rtxn
@@ -104,7 +103,7 @@ func (db *DB) releaseReader(txn *RTxn) {
 		return
 	}
 
-	db.a.release(txn.p.offset, txn.p.sz)
+	db.a.Release(txn.s)
 }
 
 // Read will return a read transaction
@@ -144,13 +143,10 @@ func (db *DB) Update(fn TxnFn) (err error) {
 	var txn WTxn
 	db.mux.Lock()
 	defer db.mux.Unlock()
-	b := db.wb.dup(db.loadTxn().t.Size())
 
-	if txn.t, err = rbt.NewRaw(InitialSize, func(sz int64) (bs []byte) {
-		bs = b.Grow(sz)
-		db.p = (*pair)(unsafe.Pointer(&db.a.mm[metaSize]))
-		return
-	}, b.Close); err != nil {
+	b := db.be.Dup()
+
+	if txn.t, err = rbt.NewRaw(InitialSize, b, db.a); err != nil {
 		return
 	}
 
@@ -162,13 +158,11 @@ func (db *DB) Update(fn TxnFn) (err error) {
 	// BenchmarkWhiskeyPut-16      1000      2073500 ns/op      376022 B/op      12000 allocs/op
 	func() {
 		if err = fn(&txn); err != nil {
-			txn.t.Close()
+			txn.t.Destroy()
 			return
 		}
 
-		db.wb = b
-		db.p.offset = b.p.offset
-		db.p.sz = b.p.sz
+		b.Notify()
 		db.initTxn(txn.t)
 	}()
 
@@ -179,13 +173,9 @@ func (db *DB) Update(fn TxnFn) (err error) {
 func (db *DB) UpdateTxn() (tp Txn, close func(commit bool), err error) {
 	var txn WTxn
 	db.mux.Lock()
-	b := db.wb.dup(db.loadTxn().t.Size())
+	b := db.be.Dup()
 
-	if txn.t, err = rbt.NewRaw(InitialSize, func(sz int64) (bs []byte) {
-		bs = b.Grow(sz)
-		db.p = (*pair)(unsafe.Pointer(&db.a.mm[metaSize]))
-		return
-	}, b.Close); err != nil {
+	if txn.t, err = rbt.NewRaw(InitialSize, b, db.a); err != nil {
 		return
 	}
 
@@ -193,11 +183,11 @@ func (db *DB) UpdateTxn() (tp Txn, close func(commit bool), err error) {
 
 	close = func(commit bool) {
 		if commit {
-			db.wb = b
-			db.p.offset = b.p.offset
-			db.p.sz = b.p.sz
-
+			b.Notify()
+			db.be = b
 			db.initTxn(txn.t)
+		} else {
+			txn.t.Destroy()
 		}
 
 		db.mux.Unlock()

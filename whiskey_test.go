@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/missionMeteora/journaler"
+
 	"github.com/bmatsuo/lmdb-go/lmdb"
 	"github.com/boltDB/bolt"
 
@@ -48,16 +50,47 @@ func TestWhiskey(t *testing.T) {
 			return
 		}
 
-		bkt.Put([]byte("name"), []byte("Josh"))
-		bkt.Put([]byte("1"), []byte("1"))
-		bkt.Put([]byte("2"), []byte("2"))
-		bkt.Put([]byte("3"), []byte("3"))
-		bkt.Put([]byte("4"), []byte("4"))
-		bkt.Put([]byte("5"), []byte("5"))
-		bkt.Put([]byte("6"), []byte("6"))
-		bkt.Put([]byte("7"), []byte("7"))
-		bkt.Put([]byte("8"), []byte("8"))
-		bkt.Put([]byte("9"), []byte("9"))
+		if err = bkt.Put([]byte("name"), []byte("Josh")); err != nil {
+			return
+		}
+
+		if err = bkt.Put([]byte("1"), []byte("1")); err != nil {
+			return
+		}
+
+		if err = bkt.Put([]byte("2"), []byte("2")); err != nil {
+			return
+		}
+
+		if err = bkt.Put([]byte("3"), []byte("3")); err != nil {
+			return
+		}
+
+		if err = bkt.Put([]byte("4"), []byte("4")); err != nil {
+			return
+		}
+
+		if err = bkt.Put([]byte("5"), []byte("5")); err != nil {
+			return
+		}
+
+		if err = bkt.Put([]byte("6"), []byte("6")); err != nil {
+			return
+		}
+
+		if err = bkt.Put([]byte("7"), []byte("7")); err != nil {
+			return
+		}
+
+		if err = bkt.Put([]byte("8"), []byte("8")); err != nil {
+			return
+		}
+
+		if err = bkt.Put([]byte("9"), []byte("9")); err != nil {
+			return
+		}
+
+		journaler.Notification("Done putting, about to GET!\n\n\n")
 
 		var val []byte
 		if val, err = bkt.Get([]byte("name")); err != nil {
@@ -143,12 +176,12 @@ func TestPut(t *testing.T) {
 	defer db.Close()
 
 	if err = db.Update(func(txn Txn) (err error) {
-		for _, kv := range testSortedListStr {
-			var bkt *Bucket
-			if bkt, err = txn.CreateBucket(testBktName); err != nil {
-				return
-			}
+		var bkt *Bucket
+		if bkt, err = txn.CreateBucket(testBktName); err != nil {
+			return
+		}
 
+		for _, kv := range testSortedListStr {
 			if err = bkt.Put(kv.Val, kv.Val); err != nil {
 				return
 			}

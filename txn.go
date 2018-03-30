@@ -2,7 +2,12 @@ package whiskey
 
 // Txn is a basic transaction interface
 type Txn interface {
-	grow(key []byte, sz int64) []byte
+	bucket(key []byte) (*Bucket, error)
+	createBucket(key []byte) (*Bucket, error)
+
+	get(key []byte) (value []byte, err error)
+	put(key, value []byte) error
+	delete(key []byte) error
 
 	Bucket(key []byte) (*Bucket, error)
 	CreateBucket(key []byte) (*Bucket, error)
