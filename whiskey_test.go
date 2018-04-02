@@ -316,12 +316,15 @@ func BenchmarkWhiskeyPut(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, kv := range testSortedListStr {
 			if err = db.Update(func(txn Txn) (err error) {
+				journaler.Debug("Starting txn")
 				var bkt *Bucket
 				if bkt, err = txn.CreateBucket(testBktName); err != nil {
 					return
 				}
 
-				return bkt.Put(kv.Val, kv.Val)
+				err = bkt.Put(kv.Val, kv.Val)
+				journaler.Debug("Txn over")
+				return
 			}); err != nil {
 				b.Fatal(err)
 			}

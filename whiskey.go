@@ -5,6 +5,9 @@ import (
 	"sync/atomic"
 	"unsafe"
 
+	"github.com/Path94/atoms"
+	"github.com/missionMeteora/journaler"
+
 	"github.com/itsmontoya/rbt"
 	"github.com/itsmontoya/rbt/allocator"
 	"github.com/itsmontoya/rbt/backend"
@@ -39,10 +42,11 @@ func NewWithSize(dir, name string, sz int64) (dbp *DB, err error) {
 		return
 	}
 
-	db.a.OnGrow(db.onGrow)
-
 	db.mb = backend.NewMulti(db.a)
 	db.be = db.mb.Get()
+	db.a.OnGrow(db.onGrow)
+
+	journaler.Debug("BACKEND SET: %p", db.be)
 
 	var t *rbt.Tree
 	if t, err = rbt.NewRaw(sz, db.be, db.a); err != nil {
@@ -62,14 +66,17 @@ type DB struct {
 	be  *backend.Backend
 
 	txn *RTxn
+
+	closed atoms.Bool
 }
 
-func (db *DB) onGrow() {
-	if db.be == nil {
-		return
+func (db *DB) onGrow() (end bool) {
+	if db.closed.Get() {
+		return true
 	}
 
 	db.mb.Set(db.be)
+	return
 }
 
 func (db *DB) loadTxn() *RTxn {
@@ -90,9 +97,10 @@ func (db *DB) newTxn(t *rbt.Tree) *RTxn {
 	return &rtxn
 }
 
-func (db *DB) initTxn(t *rbt.Tree) {
+func (db *DB) initTxn(t *rbt.Tree, b *backend.Backend) {
 	rtxn := db.newTxn(t)
 	old := db.swapTxn(rtxn)
+	db.be = b
 	db.releaseReader(old)
 	old.t.Close()
 }
@@ -103,7 +111,7 @@ func (db *DB) releaseReader(txn *RTxn) {
 		return
 	}
 
-	db.a.Release(txn.s)
+	txn.t.Destroy()
 }
 
 // Read will return a read transaction
@@ -158,14 +166,18 @@ func (db *DB) Update(fn TxnFn) (err error) {
 	// BenchmarkWhiskeyPut-16      1000      2073500 ns/op      376022 B/op      12000 allocs/op
 	func() {
 		if err = fn(&txn); err != nil {
+			journaler.Debug("Uhhh yea!")
 			txn.t.Destroy()
 			return
 		}
 
 		b.Notify()
-		db.initTxn(txn.t)
+		journaler.Debug("Notified")
+		db.initTxn(txn.t, b)
+		journaler.Debug("Init txn")
 	}()
 
+	journaler.Debug("Update txn over")
 	return
 }
 
@@ -184,8 +196,8 @@ func (db *DB) UpdateTxn() (tp Txn, close func(commit bool), err error) {
 	close = func(commit bool) {
 		if commit {
 			b.Notify()
-			db.be = b
-			db.initTxn(txn.t)
+			journaler.Debug("BACKEND SET: %p", db.be)
+			db.initTxn(txn.t, b)
 		} else {
 			txn.t.Destroy()
 		}
@@ -198,6 +210,10 @@ func (db *DB) UpdateTxn() (tp Txn, close func(commit bool), err error) {
 
 // Close will close an instance of DB
 func (db *DB) Close() (err error) {
+	if !db.closed.Set(true) {
+		return errors.ErrIsClosed
+	}
+
 	var errs errors.ErrorList
 	db.mux.Lock()
 	defer db.mux.Unlock()
