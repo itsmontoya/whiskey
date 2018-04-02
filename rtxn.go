@@ -16,7 +16,7 @@ const (
 // RTxn is a transaction type
 type RTxn struct {
 	t *rbt.Tree
-	s *allocator.Section
+	s allocator.Section
 
 	readers int64
 }
