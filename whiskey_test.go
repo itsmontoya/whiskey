@@ -16,9 +16,9 @@ import (
 )
 
 var (
-	testSortedList  = testUtils.GetSorted(1000)
-	testReverseList = testUtils.GetReverse(1000)
-	testRandomList  = testUtils.GetRand(1000)
+	testSortedList  = testUtils.GetSorted(10000)
+	testReverseList = testUtils.GetReverse(10000)
+	testRandomList  = testUtils.GetRand(10000)
 
 	testSortedListStr  = testUtils.GetStrSlice(testSortedList)
 	testReverseListStr = testUtils.GetStrSlice(testReverseList)
@@ -316,14 +316,12 @@ func BenchmarkWhiskeyPut(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, kv := range testSortedListStr {
 			if err = db.Update(func(txn Txn) (err error) {
-				journaler.Debug("Starting txn")
 				var bkt *Bucket
 				if bkt, err = txn.CreateBucket(testBktName); err != nil {
 					return
 				}
 
 				err = bkt.Put(kv.Val, kv.Val)
-				journaler.Debug("Txn over")
 				return
 			}); err != nil {
 				b.Fatal(err)
