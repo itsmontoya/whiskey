@@ -6,7 +6,6 @@ import (
 	"unsafe"
 
 	"github.com/Path94/atoms"
-	"github.com/missionMeteora/journaler"
 
 	"github.com/itsmontoya/rbt"
 	"github.com/itsmontoya/rbt/allocator"
@@ -42,14 +41,14 @@ func NewWithSize(dir, name string, sz int64) (dbp *DB, err error) {
 		return
 	}
 
+	db.a.Grow(sz)
 	db.mb = backend.NewMulti(db.a)
 	db.be = db.mb.Get()
+
 	db.a.OnGrow(db.onGrow)
 
-	journaler.Debug("BACKEND SET: %p", db.be)
-
 	var t *rbt.Tree
-	if t, err = rbt.NewRaw(sz, db.be, db.a); err != nil {
+	if t, err = rbt.NewRaw(InitialSize, db.be, db.a); err != nil {
 		return
 	}
 
@@ -102,7 +101,6 @@ func (db *DB) initTxn(t *rbt.Tree, b *backend.Backend) {
 	old := db.swapTxn(rtxn)
 	db.be = b
 	db.releaseReader(old)
-	old.t.Close()
 }
 
 func (db *DB) releaseReader(txn *RTxn) {
@@ -151,12 +149,13 @@ func (db *DB) Update(fn TxnFn) (err error) {
 	var txn WTxn
 	db.mux.Lock()
 	defer db.mux.Unlock()
-
 	b := db.be.Dup()
 
 	if txn.t, err = rbt.NewRaw(InitialSize, b, db.a); err != nil {
 		return
 	}
+
+	txn.t.Checkout()
 
 	// This anon function might seem ridiculous, but for some reason not having the function caused
 	// a performance regression, see below:
@@ -166,18 +165,14 @@ func (db *DB) Update(fn TxnFn) (err error) {
 	// BenchmarkWhiskeyPut-16      1000      2073500 ns/op      376022 B/op      12000 allocs/op
 	func() {
 		if err = fn(&txn); err != nil {
-			journaler.Debug("Uhhh yea!")
 			txn.t.Destroy()
 			return
 		}
 
 		b.Notify()
-		journaler.Debug("Notified")
 		db.initTxn(txn.t, b)
-		journaler.Debug("Init txn")
 	}()
 
-	journaler.Debug("Update txn over")
 	return
 }
 
@@ -191,12 +186,13 @@ func (db *DB) UpdateTxn() (tp Txn, close func(commit bool), err error) {
 		return
 	}
 
+	txn.t.Checkout()
+
 	tp = &txn
 
 	close = func(commit bool) {
 		if commit {
 			b.Notify()
-			journaler.Debug("BACKEND SET: %p", db.be)
 			db.initTxn(txn.t, b)
 		} else {
 			txn.t.Destroy()
