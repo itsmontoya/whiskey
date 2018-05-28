@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/Path94/atoms"
+	"github.com/PathDNA/atoms"
 
 	"github.com/itsmontoya/rbt"
 	"github.com/itsmontoya/rbt/allocator"
